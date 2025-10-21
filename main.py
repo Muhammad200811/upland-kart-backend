@@ -8,7 +8,7 @@ app = FastAPI()
 # --- CORS so Base44 can access your API ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://upland-kart-studio-b82351ca.base44.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

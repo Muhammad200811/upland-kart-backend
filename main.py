@@ -1,96 +1,85 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
 import uuid
-import json
+import time
 
-app = FastAPI()
+app = FastAPI(title="Upland Kart Generator API")
 
-# ✅ CORS Setup for your Base44 frontend
+# ✅ Allow Base44 live, preview, and localhost (for testing)
+origins = [
+    "https://upland-kart-studio-b82351ca.base44.app",
+    "https://preview--upland-kart-studio-b82351ca.base44.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://upland-kart-studio-b82351ca.base44.app",
-        "https://preview--upland-kart-studio-b82351ca.base44.app"
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ------------------------------
-# Request & Order Models
-# ------------------------------
+# 🧾 Simple in-memory storage (for testing)
+ORDERS = {}
+
+# Input structure for requests
 class OrderRequest(BaseModel):
     prompt: str
     model_type: str  # "new" or "recolor"
     user_email: str
 
-class OrderStatus(BaseModel):
-    order_id: str
-    status: str
-    download_link: Optional[str] = None
-
-# In-memory order store (for demo purposes)
-orders = {}
-
-# ------------------------------
-# Create Order Endpoint
-# ------------------------------
+# 🔧 Endpoint to create a new GoKart order
 @app.post("/create-order")
-async def create_order(order: OrderRequest):
-    if not order.prompt or not order.model_type or not order.user_email:
-        raise HTTPException(status_code=400, detail="Missing required fields")
-
+async def create_order(req: OrderRequest):
     order_id = str(uuid.uuid4())
-    
-    # Example pricing logic
-    price = 120 if order.model_type == "new" else 30
+    price = 120 if req.model_type == "new" else 30
 
-    # Save order to memory
-    orders[order_id] = {
-        "prompt": order.prompt,
-        "model_type": order.model_type,
-        "user_email": order.user_email,
+    ORDERS[order_id] = {
+        "prompt": req.prompt,
+        "model_type": req.model_type,
+        "user_email": req.user_email,
+        "status": "processing",
         "price": price,
-        "status": "pending",
-        "download_link": None
+        "created_at": time.time(),
     }
 
-    # Here you would trigger your GoKart generation workflow
-    # (e.g., Blender automation, AI model, LOD exports, IPFS upload, etc.)
+    # Simulate generation delay (this would be your AI generation backend)
+    time.sleep(2)
+    ORDERS[order_id]["status"] = "ready"
+    ORDERS[order_id]["files"] = {
+        "LOD0": f"https://ipfs.io/ipfs/{order_id}_LOD0.glb",
+        "LOD1": f"https://ipfs.io/ipfs/{order_id}_LOD1.glb",
+        "LOD2": f"https://ipfs.io/ipfs/{order_id}_LOD2.glb",
+        "NFT": f"https://ipfs.io/ipfs/{order_id}_NFT.png",
+        "BACKGROUND": f"https://ipfs.io/ipfs/{order_id}_BACKGROUND.png",
+    }
 
     return {
         "order_id": order_id,
         "price": price,
-        "status": "pending"
+        "status": ORDERS[order_id]["status"],
+        "message": "Order successfully created. Awaiting payment."
     }
 
-# ------------------------------
-# Check Order Status Endpoint
-# ------------------------------
+# 🔍 Endpoint to check order status
 @app.get("/status/{order_id}")
 async def get_status(order_id: str):
-    if order_id not in orders:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    order = orders[order_id]
+    if order_id not in ORDERS:
+        return {"error": "Order not found."}
+    return ORDERS[order_id]
 
-    # Example: mark ready automatically for testing
-    if order["status"] == "pending":
-        order["status"] = "ready"
-        order["download_link"] = f"https://example.com/downloads/{order_id}.zip"
+# 🧩 Endpoint to simulate AI model generation completion
+@app.post("/complete/{order_id}")
+async def complete_order(order_id: str):
+    if order_id not in ORDERS:
+        return {"error": "Order not found."}
+    ORDERS[order_id]["status"] = "ready"
+    return {"message": f"Order {order_id} marked as ready."}
 
-    return {
-        "order_id": order_id,
-        "status": order["status"],
-        "download_link": order["download_link"]
-    }
-
-# ------------------------------
-# Health Check
-# ------------------------------
+# 🏁 Root endpoint for quick API test
 @app.get("/")
 async def root():
-    return {"message": "Upland GoKart backend is running"}
+    return {"message": "✅ Upland Kart Generator Backend is running successfully!"}

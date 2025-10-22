@@ -5,10 +5,14 @@ import uuid
 
 app = FastAPI()
 
-# CORS configuration - MUST be before any routes
+# ✅ CORS configuration (must be BEFORE any routes)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for now
+    allow_origins=[
+        "https://upland-kart-studio-b82351ca.base44.app",
+        "https://preview--upland-kart-studio-b82351ca.base44.app",
+        "http://localhost:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,6 +24,10 @@ class Order(BaseModel):
     user_email: str
 
 orders = {}
+
+@app.get("/")
+def home():
+    return {"message": "✅ Upland Kart API is running correctly!"}
 
 @app.post("/create-order")
 def create_order(order: Order):

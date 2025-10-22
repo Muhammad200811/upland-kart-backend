@@ -47,7 +47,7 @@ def get_status(order_id: str):
         raise HTTPException(status_code=404, detail="Order not found")
     return {"order_id": order_id, "status": orders[order_id]["status"]}
 
-@app.post("/complete-order/{order_id}")
+@app.api_route("/complete-order/{order_id}", methods=["GET", "POST"])
 def complete_order(order_id: str):
     if order_id not in orders:
         raise HTTPException(status_code=404, detail="Order not found")

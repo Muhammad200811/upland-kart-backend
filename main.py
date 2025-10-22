@@ -2,113 +2,70 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
-import os
-import shutil
 
 app = FastAPI()
 
-# ⚠️ CORS configuration
+# ⚠️ MUST ADD THIS BEFORE ANY ROUTES
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change this to your Base44 domain in production
+    allow_origins=["*"],  # Allows all origins for testing; can restrict later
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],   # GET, POST, etc.
+    allow_headers=["*"],   # Any headers
 )
 
-# -----------------------------
-# Order model
-# -----------------------------
 class Order(BaseModel):
     prompt: str
-    model_type: str  # "new" or "recolor"
+    model_type: str
     user_email: str
 
-# -----------------------------
-# In-memory orders store
-# -----------------------------
 orders = {}
 
-# -----------------------------
-# Helper function to "generate" background
-# -----------------------------
-def generate_background(prompt: str):
-    src = os.path.join(os.path.dirname(__file__), "nft_ipfs.png")
-    dst = os.path.join("/tmp", f"{prompt}_background.png")
-    shutil.copyfile(src, dst)
-    return dst
-
-# -----------------------------
-# Root endpoint
-# -----------------------------
 @app.get("/")
 def root():
     return {"message": "✅ Upland Kart API is running correctly!"}
 
-# -----------------------------
-# Create order
-# -----------------------------
 @app.post("/create-order")
 def create_order(order: Order):
     order_id = str(uuid.uuid4())
-
-    # Assign price
     price = 120 if order.model_type == "new" else 30
-
-    # Generate background (copies example image)
-    background_file = generate_background(order.prompt)
-
-    # Assign files (use your uploaded files)
-    files = {
-        "LOD0": "lod_0_gltf.gltf",
-        "LOD0_texture": "lod_0_texture.jpg",
-        "LOD1": "lod_1_gltf.gltf",
-        "LOD1_texture": "lod_1_texture.jpg",
-        "LOD2": "lod_2_gltf.gltf",
-        "LOD2_texture": "lod_2_texture.jpg",
-        "NFT_fullscreen": "nft_fullscreen_gltf.gltf",
-        "NFT_IPFS": "nft_ipfs_gltf.gltf",
-        "NFT_texture_carbody": "nft_texture_carbody.jpg",
-        "NFT_texture_wheel": "nft_texture_wheel.jpg",
-        "background": background_file
-    }
-
-    # Save order
     orders[order_id] = {
         "prompt": order.prompt,
         "model_type": order.model_type,
         "user_email": order.user_email,
         "status": "pending",
-        "price": price,
-        "files": files
+        "price": price
     }
+    return {"order_id": order_id, "price": price}
 
-    return {"order_id": order_id, "price": price, "files": files}
-
-# -----------------------------
-# Check order status
-# -----------------------------
 @app.get("/status/{order_id}")
 def get_status(order_id: str):
     if order_id not in orders:
         raise HTTPException(status_code=404, detail="Order not found")
+    order = orders[order_id]
     return {
         "order_id": order_id,
-        "status": orders[order_id]["status"],
-        "files": orders[order_id]["files"]
+        "status": order["status"],
+        "files": order.get("files")
     }
 
-# -----------------------------
-# Complete order (simulate generation ready)
-# -----------------------------
 @app.post("/complete-order/{order_id}")
 def complete_order(order_id: str):
     if order_id not in orders:
         raise HTTPException(status_code=404, detail="Order not found")
+    
     orders[order_id]["status"] = "ready"
+    orders[order_id]["files"] = {
+        "LOD0": "https://storage.googleapis.com/upland-kart-files/placeholder_assets/LOD0.glb",
+        "LOD1": "https://storage.googleapis.com/upland-kart-files/placeholder_assets/LOD1.glb",
+        "LOD2": "https://storage.googleapis.com/upland-kart-files/placeholder_assets/LOD2.glb",
+        "NFT_fullscreen": "https://storage.googleapis.com/upland-kart-files/placeholder_assets/NFT_fullscreen.jpg",
+        "NFT_IPFS": "https://storage.googleapis.com/upland-kart-files/placeholder_assets/NFT_IPFS.jpg",
+        "background": "https://storage.googleapis.com/upland-kart-files/placeholder_assets/Background.png"
+    }
+    
     return {
         "order_id": order_id,
         "status": "ready",
         "files": orders[order_id]["files"]
     }
-

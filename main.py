@@ -2,94 +2,113 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
-import shutil
 import os
+import shutil
 
 app = FastAPI()
 
-# ⚠️ CORS
+# ⚠️ CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # You can restrict to your Base44 domain later
+    allow_origins=["*"],  # Change this to your Base44 domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# -----------------------------
+# Order model
+# -----------------------------
 class Order(BaseModel):
     prompt: str
     model_type: str  # "new" or "recolor"
     user_email: str
 
+# -----------------------------
+# In-memory orders store
+# -----------------------------
 orders = {}
 
-# Root
+# -----------------------------
+# Helper function to "generate" background
+# -----------------------------
+def generate_background(prompt: str):
+    src = os.path.join(os.path.dirname(__file__), "nft_ipfs.png")
+    dst = os.path.join("/tmp", f"{prompt}_background.png")
+    shutil.copyfile(src, dst)
+    return dst
+
+# -----------------------------
+# Root endpoint
+# -----------------------------
 @app.get("/")
 def root():
-    return {"message": "✅ Upland Kart API running!"}
+    return {"message": "✅ Upland Kart API is running correctly!"}
 
+# -----------------------------
 # Create order
+# -----------------------------
 @app.post("/create-order")
 def create_order(order: Order):
     order_id = str(uuid.uuid4())
 
-    # Generate the final files based on prompt
-    lod_files = generate_lods(order.prompt)
-    nft_file = generate_nft(order.prompt)
+    # Assign price
+    price = 120 if order.model_type == "new" else 30
+
+    # Generate background (copies example image)
     background_file = generate_background(order.prompt)
+
+    # Assign files (use your uploaded files)
+    files = {
+        "LOD0": "lod_0_gltf.gltf",
+        "LOD0_texture": "lod_0_texture.jpg",
+        "LOD1": "lod_1_gltf.gltf",
+        "LOD1_texture": "lod_1_texture.jpg",
+        "LOD2": "lod_2_gltf.gltf",
+        "LOD2_texture": "lod_2_texture.jpg",
+        "NFT_fullscreen": "nft_fullscreen_gltf.gltf",
+        "NFT_IPFS": "nft_ipfs_gltf.gltf",
+        "NFT_texture_carbody": "nft_texture_carbody.jpg",
+        "NFT_texture_wheel": "nft_texture_wheel.jpg",
+        "background": background_file
+    }
 
     # Save order
     orders[order_id] = {
         "prompt": order.prompt,
         "model_type": order.model_type,
         "user_email": order.user_email,
-        "status": "ready",
-        "files": {
-            "LOD0": lod_files[0],
-            "LOD1": lod_files[1],
-            "LOD2": lod_files[2],
-            "NFT": nft_file,
-            "Background": background_file
-        },
-        "price": 120 if order.model_type == "new" else 30
+        "status": "pending",
+        "price": price,
+        "files": files
     }
 
-    return {"order_id": order_id, "status": "ready", "files": orders[order_id]["files"], "price": orders[order_id]["price"]}
+    return {"order_id": order_id, "price": price, "files": files}
 
-# Check status
+# -----------------------------
+# Check order status
+# -----------------------------
 @app.get("/status/{order_id}")
 def get_status(order_id: str):
     if order_id not in orders:
         raise HTTPException(status_code=404, detail="Order not found")
-    return {"order_id": order_id, "status": orders[order_id]["status"], "files": orders[order_id]["files"]}
+    return {
+        "order_id": order_id,
+        "status": orders[order_id]["status"],
+        "files": orders[order_id]["files"]
+    }
 
-# --- Helper functions ---
+# -----------------------------
+# Complete order (simulate generation ready)
+# -----------------------------
+@app.post("/complete-order/{order_id}")
+def complete_order(order_id: str):
+    if order_id not in orders:
+        raise HTTPException(status_code=404, detail="Order not found")
+    orders[order_id]["status"] = "ready"
+    return {
+        "order_id": order_id,
+        "status": "ready",
+        "files": orders[order_id]["files"]
+    }
 
-def generate_lods(prompt):
-    """
-    Placeholder: generate LOD0, LOD1, LOD2 GLTF files ≤ 20k triangles
-    Returns a list of filenames
-    """
-    lod0 = f"lod0_{uuid.uuid4()}.gltf"
-    lod1 = f"lod1_{uuid.uuid4()}.gltf"
-    lod2 = f"lod2_{uuid.uuid4()}.gltf"
-    # For now copy a template LOD (replace with AI generation later)
-    for src, dst in [("lod_0_gltf.gltf", lod0), ("lod_1_gltf.gltf", lod1), ("lod_2_gltf.gltf", lod2)]:
-        shutil.copyfile(src, dst)
-    return [lod0, lod1, lod2]
-
-def generate_nft(prompt):
-    """
-    Placeholder: generate NFT GLTF ≤ 10MB with carbody + wheel meshes
-    """
-    dst = f"nft_{uuid.uuid4()}.gltf"
-    shutil.copyfile("nft_fullscreen_gltf.gltf", dst)
-    return dst
-
-def generate_background(prompt):
-    """
-    Placeholder: generate PNG background
-    """
-    dst = f"background_{uuid.uuid4()}.png"
-    shutil.copyfile("background_template.png", dst)
-    return dst

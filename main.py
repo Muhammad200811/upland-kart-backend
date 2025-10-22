@@ -1,63 +1,93 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import time
+from typing import Optional
+import uuid
+import json
 
 app = FastAPI()
 
-# --- CORS so Base44 can access your API ---
+# ✅ CORS Setup for your Base44 frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://upland-kart-studio-b82351ca.base44.app"],
+    allow_origins=["https://upland-kart-studio-b82351ca.base44.app"],  # Only allow your Base44 frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ------------------------------
+# Request & Order Models
+# ------------------------------
 class OrderRequest(BaseModel):
     prompt: str
     model_type: str  # "new" or "recolor"
     user_email: str
 
+class OrderStatus(BaseModel):
+    order_id: str
+    status: str
+    download_link: Optional[str] = None
+
+# In-memory order store (for demo purposes)
 orders = {}
 
-@app.get("/")
-def home():
-    return {"status": "Upland Kart API is running"}
-
+# ------------------------------
+# Create Order Endpoint
+# ------------------------------
 @app.post("/create-order")
-def create_order(req: OrderRequest):
-    order_id = f"ORD-{int(time.time())}"
+async def create_order(order: OrderRequest):
+    if not order.prompt or not order.model_type or not order.user_email:
+        raise HTTPException(status_code=400, detail="Missing required fields")
+
+    order_id = str(uuid.uuid4())
+    
+    # Example pricing logic
+    price = 120 if order.model_type == "new" else 30
+
+    # Save order to memory
     orders[order_id] = {
-        "prompt": req.prompt,
-        "type": req.model_type,
-        "email": req.user_email,
-        "status": "processing",
+        "prompt": order.prompt,
+        "model_type": order.model_type,
+        "user_email": order.user_email,
+        "price": price,
+        "status": "pending",
+        "download_link": None
     }
-    print(f"[INFO] Generating model for {req.prompt} ({req.model_type})")
 
-    time.sleep(2)
-    orders[order_id]["status"] = "ready"
-    orders[order_id]["download_url"] = f"https://upland-kart-api.onrender.com/download/{order_id}"
-    return {"order_id": order_id, "price": 120 if req.model_type == "new" else 30}
+    # Here you would trigger your GoKart generation workflow
+    # (e.g., Blender automation, AI model, LOD exports, IPFS upload, etc.)
 
-@app.get("/status/{order_id}")
-def get_status(order_id: str):
-    if order_id not in orders:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return orders[order_id]
-
-@app.get("/download/{order_id}")
-def download(order_id: str):
-    if order_id not in orders:
-        raise HTTPException(status_code=404, detail="Order not found")
-    if orders[order_id]["status"] != "ready":
-        raise HTTPException(status_code=400, detail="Model not ready yet")
     return {
-        "message": "Here’s your GoKart model files (mock link)",
-        "LOD0": "https://example.com/gokart_LOD0.gltf",
-        "LOD1": "https://example.com/gokart_LOD1.gltf",
-        "LOD2": "https://example.com/gokart_LOD2.gltf",
-        "NFT": "https://example.com/gokart_NFT.jpg",
-        "BACKGROUND": "https://example.com/gokart_background.png"
+        "order_id": order_id,
+        "price": price,
+        "status": "pending"
     }
+
+# ------------------------------
+# Check Order Status Endpoint
+# ------------------------------
+@app.get("/status/{order_id}")
+async def get_status(order_id: str):
+    if order_id not in orders:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order = orders[order_id]
+
+    # Example: mark ready automatically for testing
+    if order["status"] == "pending":
+        order["status"] = "ready"
+        order["download_link"] = f"https://example.com/downloads/{order_id}.zip"
+
+    return {
+        "order_id": order_id,
+        "status": order["status"],
+        "download_link": order["download_link"]
+    }
+
+# ------------------------------
+# Health Check
+# ------------------------------
+@app.get("/")
+async def root():
+    return {"message": "Upland GoKart backend is running"}

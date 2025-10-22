@@ -10,7 +10,10 @@ app = FastAPI()
 # ✅ CORS Setup for your Base44 frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://upland-kart-studio-b82351ca.base44.app"],  # Only allow your Base44 frontend
+    allow_origins=[
+        "https://upland-kart-studio-b82351ca.base44.app",
+        "https://preview--upland-kart-studio-b82351ca.base44.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
